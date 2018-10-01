@@ -287,5 +287,3 @@ plt.imshow((truth[0,:,:,2] - predictions[0,:,:,2]),cmap='jet')
 plt.colorbar()
 
 plt.show()
-
-##test
