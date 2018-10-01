@@ -1,4 +1,4 @@
-rom keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D, LocallyConnected2D, Flatten
+from keras.layers import Input, Dense, Conv2D, MaxPooling2D, UpSampling2D, LocallyConnected2D, Flatten
 from keras.models import Model
 from keras import backend as K
 from os import listdir
