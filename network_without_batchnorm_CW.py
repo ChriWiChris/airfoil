@@ -4,11 +4,18 @@ from tensorflow import keras
 import matplotlib.pyplot as plt
 from os import listdir
 import random
+import tensorflow.keras.backend as K
+
+
+def rel_err(y_true, y_pred):
+    return K.sum(K.abs(y_true - y_pred)) / K.sum(np.abs(y_true))
 
 ### load data ###
-dataDir = "../tensorflow/data/trainSmallFA/"
+#dataDir = "../tensorflow/data/trainSmallFA/"
+dataDir = "../../data/trainSmallFA/"
 files = listdir(dataDir)[0:100]
 #files.sort()
+random.seed(20181001)
 random.shuffle(files)
 totalLength = len(files)
 inputs = np.empty((len(files), 3, 64, 64))
@@ -22,11 +29,23 @@ for i, file in enumerate(files):
   targets[i, 0, :, :] = (targets[i, 0, :, :] - np.mean(targets[i, 0, :, :]))
 
 
+
+# normalize
+
+inputs[:,0,:,:] /= np.amax(np.absolute(inputs[:,0,:,:]))
+inputs[:,1,:,:] /= np.amax(np.absolute(inputs[:,1,:,:]))
+inputs[:,2,:,:] /= np.amax(np.absolute(inputs[:,2,:,:]))
+
+targets[:,0,:,:] /= np.amax(np.absolute(targets[:,0,:,:]))
+targets[:,1,:,:] /= np.amax(np.absolute(targets[:,1,:,:]))
+targets[:,2,:,:] /= np.amax(np.absolute(targets[:,2,:,:]))
+
+
 ### define parameters ###
 train_size = 0.8
 validation_size = 1 - train_size
 
-kernel_size = (3, 3)
+kernel_size = (4, 4)
 
 ### rearrange the input data from NCHW to NHWC ###
 i = int(train_size * inputs.shape[0])
@@ -149,27 +168,27 @@ convolve_6 = keras.layers.Conv2D(512, kernel_size, strides=(2, 2), padding='same
 ## upsampling layers with skip connections ##
 upsample_6 = keras.layers.UpSampling2D(size=(2, 2), data_format='channels_last')(convolve_6)
 merged_6 = keras.layers.concatenate([upsample_6, act_5], axis=-1)
-deconvolve_6 = keras.layers.Conv2D(1024, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_6)
+deconvolve_6 = keras.layers.Conv2D(512, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_6)
 act_6 = keras.layers.LeakyReLU(alpha=0.0)(deconvolve_6)
 
 upsample_5 = keras.layers.UpSampling2D(size=(2, 2), data_format='channels_last')(act_6)
 merged_5 = keras.layers.concatenate([upsample_5, act_4], axis=-1)
-deconvolve_5 = keras.layers.Conv2D(1024, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_5)
+deconvolve_5 = keras.layers.Conv2D(256, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_5)
 act_7 = keras.layers.LeakyReLU(alpha=0.0)(deconvolve_5)
 
 upsample_4 = keras.layers.UpSampling2D(size=(2, 2), data_format='channels_last')(act_7)
 merged_4 = keras.layers.concatenate([upsample_4, act_3], axis=-1)
-deconvolve_4 = keras.layers.Conv2D(512, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_4)
+deconvolve_4 = keras.layers.Conv2D(128, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_4)
 act_8 = keras.layers.LeakyReLU(alpha=0.0)(deconvolve_4)
 
 upsample_3 = keras.layers.UpSampling2D(size=(2, 2), data_format='channels_last')(act_8)
 merged_3 = keras.layers.concatenate([upsample_3, act_2], axis=-1)
-deconvolve_3 = keras.layers.Conv2D(256, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_3)
+deconvolve_3 = keras.layers.Conv2D(64, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_3)
 act_9 = keras.layers.LeakyReLU(alpha=0.0)(deconvolve_3)
 
 upsample_2 = keras.layers.UpSampling2D(size=(2, 2), data_format='channels_last')(act_9)
 merged_2 = keras.layers.concatenate([upsample_2, act_1], axis=-1)
-deconvolve_2 = keras.layers.Conv2D(128, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_2)
+deconvolve_2 = keras.layers.Conv2D(64, kernel_size, strides=(1, 1), padding='same', data_format='channels_last')(merged_2)
 act_10 = keras.layers.LeakyReLU(alpha=0.0)(deconvolve_2)
 
 upsample_1 = keras.layers.UpSampling2D(size=(2, 2), data_format='channels_last')(act_10)
@@ -190,11 +209,11 @@ deconvolve_0 = keras.layers.Conv2D(3, kernel_size, strides=(1, 1), padding='same
 model = keras.models.Model(inputs=input_layer, outputs=deconvolve_0)
 
 
-model.compile(optimizer=tf.train.AdamOptimizer(0.0001), loss='mean_squared_error')
-
+model.compile(optimizer=keras.optimizers.Adam(0.0006), loss='mean_squared_error', metrics=['accuracy', rel_err])
+#model.compile(optimizer=tf.train.AdamOptimizer(0.0006), loss='mean_squared_error')
 
 ### train the network ###
-history = model.fit(data_input, data_target, epochs=20, batch_size=1, validation_data=(val_input, val_target))
+history = model.fit(data_input, data_target, epochs=20, batch_size=16, validation_data=(val_input, val_target))
 #history = model.fit(data_input, data_target, epochs=50, batch_size=1, validation_data=(data_input, data_target))
 
 model.save('full_network_100_samples.h5')
@@ -202,7 +221,8 @@ model.save('full_network_100_samples.h5')
 plt.figure()
 plt.plot(history.history['loss'])
 plt.plot(history.history['val_loss'])
-plt.legend(['loss', 'val_loss'])
+plt.plot(history.history['rel_err'])
+plt.legend(['loss', 'val_loss', 'rel_err'])
 
 print(model.summary())
 
